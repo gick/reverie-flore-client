@@ -1,0 +1,253 @@
+<!--
+@license
+Copyright (c) 2016 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+<link rel="import" href="../bower_components/polymer/polymer.html">
+<link rel="import" href="../bower_components/app-route/app-location.html">
+<link rel="import" href="../bower_components/app-route/app-route.html">
+<link rel="import" href="../bower_components/app-layout/app-drawer-layout/app-drawer-layout.html">
+<link rel="import" href="../bower_components/app-layout/app-drawer/app-drawer.html">
+<link rel="import" href="../bower_components/app-layout/app-scroll-effects/app-scroll-effects.html">
+<link rel="import" href="../bower_components/app-layout/app-header/app-header.html">
+<link rel="import" href="../bower_components/app-layout/app-header-layout/app-header-layout.html">
+<link rel="import" href="../bower_components/app-layout/app-toolbar/app-toolbar.html">
+<link rel="import" href="../bower_components/paper-icon-button/paper-icon-button.html">
+<link rel="import" href="../bower_components/iron-pages/iron-pages.html">
+<link rel="import" href="../bower_components/iron-ajax/iron-ajax.html">
+<link rel="import" href="../bower_components/iron-selector/iron-selector.html">
+<link rel="import" href="../bower_components/akc-meta/akc-meta.html">
+<link rel="import" href="my-icons.html">
+<link rel="import" href="organ-view.html">
+<link rel="import" href="./candidate-view.html">
+
+<dom-module id="my-app">
+    <template>
+        <style>
+        :host {
+            display: block;
+            --app-primary-color: #4285f4;
+            --app-secondary-color: black;
+        }
+        
+        app-header {
+            background-color: var(--app-primary-color);
+            color: #fff;
+        }
+        
+        app-header paper-icon-button {
+            --paper-icon-button-ink-color: white;
+        }
+        
+        .drawer-list {
+            margin: 0 20px;
+        }
+        
+        .drawer-list a {
+            display: block;
+            padding: 0 16px;
+            line-height: 40px;
+            text-decoration: none;
+            color: var(--app-secondary-color);
+        }
+        
+        .drawer-list a.iron-selected {
+            color: black;
+            font-weight: bold;
+        }
+        
+        .drawer-list a.subroute {
+            padding-left: 32px;
+        }
+        </style>
+        <app-location route="{{route}}"></app-location>
+        <app-route route="{{route}}" pattern="/:page" data="{{routeData}}" tail="{{subroute}}"></app-route>
+        <app-drawer-layout fullbleed>
+            <iron-ajax auto id="ajax" url="/listOrgansDescriptors" handle-as="json" on-response="handleResponse" debounce-duration="300"></iron-ajax>
+            <iron-ajax auto id="organDesc" active-requests={{activeRec}} url="{{currentURL}}" handle-as="json" on-response="handleResponse" debounce-duration="300"></iron-ajax>
+            <iron-ajax id="plantlist" url="/listPlantsByProp" params={{plantDescriptors}} handle-as="json" on-response="handleResponse" debounce-duration="300"></iron-ajax>
+            <app-drawer>
+                <app-toolbar>Organes et parties à caractériser</app-toolbar>
+                <iron-selector selected="{{page}}" attr-for-selected="name" class="drawer-list" role="navigation">
+                    <template is="dom-repeat" items="{{organs}}">
+                        <a name="{{item.name}}" href="javascript:void(0)">{{item.organLabel}}</a>
+                    </template>
+                    <a name="candidat" href="javascript:void(0)">Liste des plantes candidates</a>
+                </iron-selector>
+                <div>Plante possible : {{candidates.length}} over 50</div>
+            </app-drawer>
+            <!-- Main content -->
+            <app-header-layout has-scrolling-region>
+                <app-header condenses reveals effects="waterfall">
+                    <app-toolbar>
+                        <paper-icon-button icon="menu" drawer-toggle></paper-icon-button>
+                        <div title>Reveries-Florae Demo !This website can be unstable!</div>
+                    </app-toolbar>
+                </app-header>
+                <iron-pages id="pages" role="main" selected="{{page}}" attr-for-selected="name">
+                    <template is="dom-repeat" items="{{organs}}">
+                        <organ-view organ-descriptors="{{item.descriptors}}" organ-label="{{item.organLabel}}" organ-url="{{item.organURL}}" name="{{item.name}}"></organ-view>
+                    </template>
+                    <candidate-view name="candidat" candidat={{candidates}}></candidate-view>
+                </iron-pages>
+            </app-header-layout>
+        </app-drawer-layout>
+    </template>
+    <script>
+    Polymer({
+
+        is: 'my-app',
+        ready: function() {
+            this.$.ajax.addEventListener('response', this.transformRepresentation.bind(this))
+            this.$.organDesc.addEventListener('response', this.getDescValues.bind(this))
+            this.plantDescriptors = {}
+            this.plantAttributes = []
+            this.candidates=[]
+            this.$.pages.addEventListener('iron-select', this.triggerOrganView.bind(this))
+            this.addEventListener('propertySelected', this.propertySelected.bind(this))
+            this.$.plantlist.addEventListener('response',this.updateCandidates.bind(this))
+            this.$.plantlist.generateRequest()
+        },
+
+
+        updateCandidates:function(ev){
+          this.candidates=[];
+          this.candidates=ev.detail.__data__.response;
+        }
+
+
+        ,
+        propertySelected: function(ev) {
+            var uniqProp = ev.detail.prop.split('#')[1];
+            this.plantDescriptors[uniqProp] = ev.detail.label;
+            this.push('plantAttributes',ev.detail.label)
+            this.$.plantlist.generateRequest()
+
+        },
+        getDescValues: function(response) {
+            var response = event.detail.__data__.response;
+            var url = event.detail.url;
+            var descriptorType = url.substr(url.lastIndexOf('/') + 1);
+            this.associateDescriptorsValues(response, descriptorType)
+                //   this.set('organs',this.objectArray)
+        },
+
+        associateDescriptorsValues: function(response, descriptorType) {
+            for (var i = 0; i < this.objectArray.length; i++) {
+                for (var j = 0; j < this.objectArray[i].descriptors.length; j++) {
+                    var descriptorMatch = this.objectArray[i].descriptors[j].URL.split('#')[1];
+                    if (descriptorMatch === descriptorType) {
+                        for (var k = 0; k < response.length; k++) {
+                            this.objectArray[i].descriptors[j].values.push(response[k])
+                        }
+                    }
+                }
+            }
+            if (this.activeRec.length <= 1)
+                this.set('organs', this.objectArray);
+        },
+
+
+
+        triggerOrganView: function(ev) {
+            var page = this.$.pages.selectedItem;
+        },
+        handleResponse: function(resp) {
+            //    this.transformRepresentation(resp.detail.data)
+        },
+        transformRepresentation: function(event) {
+            var response = event.detail.__data__.response;
+            this.objectArray = []
+            var obj = {}
+            obj.organURL = response[0].organ.value;
+            obj.organLabel = response[0].lorgan.value
+            var organDescriptor = {}
+            organDescriptor.URL = response[0].descriptorDef.value;
+            organDescriptor.label = response[0].descriptorLabel.value;
+            obj.descriptors = [];
+            organDescriptor.values = []
+            obj.descriptors.push(organDescriptor);
+            this.objectArray.push(obj)
+            var currentStatus = 0
+            for (var i = 1; i < response.length; i++) {
+                if (response[i].organ.value === this.objectArray[currentStatus].organURL) {
+                    var newOrganDescriptor = {}
+                    newOrganDescriptor.URL = response[i].descriptorDef.value;
+                    newOrganDescriptor.label = response[i].descriptorLabel.value;
+                    newOrganDescriptor.values = [];
+                    this.objectArray[currentStatus].descriptors.push(newOrganDescriptor)
+                } else {
+                    var newObj = {}
+                    newObj.organURL = response[i].organ.value;
+                    newObj.organLabel = response[i].lorgan.value
+                    var newOrganDescriptor = {}
+                    newOrganDescriptor.URL = response[i].descriptorDef.value;
+                    newOrganDescriptor.label = response[i].descriptorLabel.value;
+                    newOrganDescriptor.values = [];
+                    newObj.descriptors = [];
+                    newObj.descriptors.push(newOrganDescriptor);
+                    this.objectArray.push(newObj)
+                    currentStatus = currentStatus + 1;
+
+                }
+            }
+
+
+            for (var j = 0; j < this.objectArray.length; j++) {
+                var url = this.objectArray[j].organURL;
+                var last = url.split('#')[1]
+                this.objectArray[j].name = last;
+            }
+            console.log(this.objectArray)
+            this.setDescriptorsValue(this.objectArray)
+
+
+        },
+
+        setDescriptorsValue: function() {
+            for (var i = 0; i < this.objectArray.length; i++) {
+                this.currentURL = null;
+                for (var j = 0; j < this.objectArray[i].descriptors.length; j++) {
+                    this.currentURL = '/listDescriptorsValue/' + this.objectArray[i].descriptors[j].URL.split('#')[1];
+                    this.$.organDesc.generateRequest();
+                }
+            }
+
+        },
+
+
+        properties: {
+            objectArray: {
+                type: Array,
+                reflectToAttribute: true,
+                notify: true
+            },
+            page: {
+                type: String,
+                reflectToAttribute: true,
+                //       observer: '_pageChanged'
+            },
+
+        },
+
+        observers: [
+            //     '_routePageChanged(routeData.page)'
+        ],
+
+        _routePageChanged: function(page) {
+            this.page = page || 'view1';
+        },
+
+        _pageChanged: function(page) {
+            // load page import on demand.
+            this.importHref(
+                this.resolveUrl('my-' + page + '.html'), null, null, true);
+        }
+
+    });
+    </script>
+</dom-module>
