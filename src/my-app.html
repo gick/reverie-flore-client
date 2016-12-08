@@ -1,4 +1,4 @@
-<!--
+œ<!--
 @license
 Copyright (c) 2016 The Polymer Project Authors. All rights reserved.
 This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
@@ -78,14 +78,18 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
                     </template>
                     <a name="candidat" href="javascript:void(0)">Liste des plantes candidates</a>
                 </iron-selector>
-                <div>Plante possible : {{candidates.length}} over 50</div>
+                <div> Plante possible : {{candidates.length}} over 50</div>
             </app-drawer>
             <!-- Main content -->
             <app-header-layout has-scrolling-region>
                 <app-header condenses reveals effects="waterfall">
                     <app-toolbar>
                         <paper-icon-button icon="menu" drawer-toggle></paper-icon-button>
-                        <div title>Reveries-Florae Demo !This website can be unstable!</div>
+                        <span class="title">Reveries-Florae Proof of concept</span>
+                          <span class="title">Title</span>
+  <paper-icon-button icon="refresh"></paper-icon-button>
+  <paper-icon-button icon="add">+</paper-icon-button>
+
                     </app-toolbar>
                 </app-header>
                 <iron-pages id="pages" role="main" selected="{{page}}" attr-for-selected="name">
@@ -128,7 +132,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             this.$.plantlist.generateRequest()
 
         },
-        getDescValues: function(response) {
+        getDescValues: function(event) {
             var response = event.detail.__data__.response;
             var url = event.detail.url;
             var descriptorType = url.substr(url.lastIndexOf('/') + 1);
